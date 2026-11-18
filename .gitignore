@@ -1,0 +1,11 @@
+# build output
+/build/
+/disk-check
+*.test
+*.out
+*.prof
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

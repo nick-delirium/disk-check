@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Disk Check</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='2' width='11' height='20' rx='3' fill='%233d7eff'/%3E%3Crect x='15' y='2' width='7' height='11' rx='2.5' fill='%2385adff'/%3E%3Crect x='15' y='15' width='7' height='7' rx='2.5' fill='%231f56c9'/%3E%3C/svg%3E">
+<style>
+/* Direction: exact, calm, a little technical. Graphite neutrals, one cobalt accent.
+   The color lives in the treemap and the kind bar; the chrome stays quiet. */
+:root{
+  --sunk:#0f0f10;--bg:#141415;--panel:#19191b;--raised:#232325;--raised2:#2b2b2e;
+  --line:rgba(237,237,237,.08);--line2:rgba(237,237,237,.05);
+  --text:#ededed;--text2:#a1a1a6;--muted:#85858b;
+  --accent:#4b8bff;--accent-soft:rgba(75,139,255,.16);
+  --btn-primary:#ededed;--btn-primary-text:#141415;
+  --danger:#e5484d;--warn:#e2a336;
+  --tip-bg:#232325;--tip-text:#ededed;--float-shadow:0 8px 24px rgba(0,0,0,.32);
+  --tile-s:42%;--tile-l:36%;--tile-dir-l:20%;--tile-text:rgba(255,255,255,.95);--tile-sub:rgba(255,255,255,.8);--hl:#ededed;
+  --ease:cubic-bezier(.22,1,.36,1);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){:root{
+  --sunk:#ffffff;--bg:#fafafa;--panel:#ffffff;--raised:#f4f4f5;--raised2:#ececee;
+  --line:rgba(23,23,23,.08);--line2:rgba(23,23,23,.05);
+  --text:#171717;--text2:#525252;--muted:#737373;
+  --accent:#1f63d8;--accent-soft:rgba(31,99,216,.10);
+  --btn-primary:#171717;--btn-primary-text:#ffffff;
+  --danger:#dc2626;--warn:#b7791f;
+  --tip-bg:#171717;--tip-text:#fafafa;--float-shadow:0 8px 24px rgba(0,0,0,.08);
+  --tile-s:52%;--tile-l:70%;--tile-dir-l:92%;--tile-text:rgba(10,10,12,.9);--tile-sub:rgba(10,10,12,.72);--hl:#171717;
+  color-scheme:light;
+}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:13px/20px -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--raised);padding:0 4px;border-radius:4px}
+.muted{color:var(--muted)}
+.ic{width:16px;height:16px;flex:none;color:var(--muted)}
+
+/* header */
+.top{position:relative;display:flex;align-items:center;gap:16px;padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;white-space:nowrap}
+.scanbar{display:flex;gap:8px;flex:1 1 320px;max-width:560px}
+.scanbar input{flex:1;min-width:0;height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--sunk);color:var(--text);font:12px ui-monospace,SFMono-Regular,Menlo,monospace;transition:border-color 150ms var(--ease),box-shadow 150ms var(--ease)}
+.scanbar input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.btn{height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--raised);font-weight:500;cursor:pointer;white-space:nowrap;transition:background-color 150ms var(--ease)}
+.btn:hover{background:var(--raised2)}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--btn-primary);border-color:transparent;color:var(--btn-primary-text)}
+.btn.primary:hover{opacity:.9}
+.btn.danger{background:var(--danger);border-color:transparent;color:#fff}
+.btn.sm{height:28px;padding:0 8px;font-size:12px;border-radius:6px}
+.split-btn{display:flex}
+.split-btn>.btn:first-child{border-radius:8px 0 0 8px}
+.split-btn>.caret{width:28px;padding:0;display:grid;place-items:center;border-radius:0 8px 8px 0;border-left-color:transparent;box-shadow:inset 1px 0 0 var(--line)}
+.split-btn>.caret svg{width:14px;height:14px}
+.menu{position:fixed;z-index:80;min-width:240px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--float-shadow);animation:pop .16s var(--ease)}
+@keyframes pop{from{opacity:0;transform:translateY(-4px)}}
+.menu button{display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 12px;border:0;border-radius:8px;background:none;text-align:left;cursor:pointer;white-space:nowrap}
+.menu button:hover,.menu button:focus-visible{background:var(--raised);outline:none}
+.menu .k{margin-left:auto;padding-left:16px;color:var(--muted);font:12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.ib.busy svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.vdelta{margin-left:8px;font-weight:500}
+.vdelta.up{color:#4cc38a}
+.vdelta.down{color:var(--warn)}
+.vdelta.same{color:var(--muted);font-weight:400}
+kbd{display:inline-block;min-width:20px;padding:0 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:var(--raised);font:12px/18px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;color:var(--text)}
+.keys{width:min(420px,100%)}
+.keys table{width:100%;border-collapse:collapse}
+.keys td{padding:4px 0;vertical-align:middle}
+.keys td:first-child{white-space:nowrap;padding-right:16px}
+.keys td:last-child{color:var(--text2)}
+.hdr-acts{display:flex;gap:4px;flex:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.vol{margin-left:auto;width:232px;flex:none;font-size:12px;line-height:16px;color:var(--muted)}
+.vol .vrow{display:flex;justify-content:space-between;gap:8px}
+.vol b{color:var(--text);font-weight:500}
+.vbar{height:4px;border-radius:2px;background:var(--raised);overflow:hidden;margin-top:4px}
+.vbar i{display:block;height:100%;background:var(--accent)}
+.vbar.warn i{background:var(--warn)}
+.vbar.crit i{background:var(--danger)}
+
+/* tabs + places */
+.tabs{display:flex;align-items:center;gap:4px;padding:0 12px;height:40px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs button[data-tab]{height:40px;background:none;border:0;border-bottom:2px solid transparent;padding:0 8px;color:var(--text2);font-weight:500;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:8px;transition:color 150ms var(--ease)}
+.tabs button[data-tab]:hover{color:var(--text)}
+.tabs button[data-tab]:disabled{opacity:.4;cursor:default;color:var(--text2)}
+.tabs button[data-tab].on{color:var(--text);border-bottom-color:var(--text)}
+.count{color:var(--muted);font-weight:400}
+
+.banner{display:flex;align-items:center;gap:12px;padding:8px 16px;background:color-mix(in srgb,var(--warn) 10%,var(--panel));border-bottom:1px solid var(--line);color:var(--text2)}
+.banner>.ic{color:var(--warn)}
+.banner>span{flex:1}
+.banner b{color:var(--text);font-weight:500}
+
+/* layout */
+main{flex:1;min-height:0;position:relative}
+.view{position:absolute;inset:0;display:none;flex-direction:column;gap:12px;padding:16px;min-height:0}
+.view.on{display:flex}
+.view.scroll{overflow:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-height:0}
+.crumbbar{display:flex;align-items:center;gap:8px;min-height:32px}
+.ib{width:28px;height:28px;display:inline-grid;place-items:center;border-radius:8px;border:0;background:none;color:var(--muted);cursor:pointer;padding:0;flex:none;transition:background-color 150ms var(--ease),color 150ms var(--ease)}
+.ib:hover{background:var(--raised);color:var(--text)}
+.ib.danger:hover{color:var(--danger)}
+.ib:disabled{opacity:.35;pointer-events:none}
+.ib svg{width:16px;height:16px}
+.crumbs{display:flex;align-items:center;gap:0;overflow-x:auto;white-space:nowrap;flex:1;min-width:0;scrollbar-width:none}
+.crumb{background:none;border:0;height:28px;padding:0 8px;border-radius:6px;color:var(--text2);cursor:pointer;transition:background-color 150ms var(--ease)}
+.crumb:hover{background:var(--raised);color:var(--text)}
+.crumb.cur{color:var(--text);font-weight:500;cursor:default}
+.crumb.cur:hover{background:none}
+.sep{width:12px;height:12px;color:var(--muted);flex:none}
+.summary{color:var(--muted);white-space:nowrap;font-size:12px}
+.summary b{color:var(--text);font-weight:500}
+.scanstat{display:flex;align-items:center;gap:12px;white-space:nowrap;font-size:12px;color:var(--muted);min-width:0}
+.scanstat b{color:var(--text);font-weight:500}
+.trace{font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);white-space:pre}
+.ss-cur{max-width:320px;min-width:0;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.split{flex:1;min-height:0;display:flex;gap:12px}
+.tm-wrap{position:relative;flex:1.25;padding:4px;display:flex;min-width:0;overflow:hidden}
+.sweep{position:absolute;left:0;top:0;bottom:0;margin:0;pointer-events:none;font:11px/12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text);opacity:.28;white-space:pre;overflow:hidden;z-index:4}
+.dissolve{position:fixed;z-index:60;margin:0;pointer-events:none;font:11px/12px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;overflow:hidden}
+.table-wrap{flex:1;overflow:auto;min-width:472px}
+
+/* treemap: the one rich moment, flat folder colors */
+.treemap{position:relative;flex:1;min-width:0;min-height:0;user-select:none;contain:strict;transform-origin:0 0}
+.tile{position:absolute;overflow:hidden;border-radius:4px;cursor:pointer;color:var(--tile-text);contain:layout paint;
+  background:hsl(var(--h) var(--s,var(--tile-s)) calc(var(--tile-l) + var(--dl,0%)))}
+.treemap.anim .tile{transition:left .25s var(--ease),top .25s var(--ease),width .25s var(--ease),height .25s var(--ease)}
+.enter{animation:enter .25s var(--ease)}
+@keyframes enter{from{opacity:0}}
+.view.live .tile,.view.live .grid tbody tr{cursor:default}
+.tile.box{background:hsl(var(--h) calc(var(--s,var(--tile-s)) * .5) var(--tile-dir-l));border-radius:8px}
+.tile.more{--h:240;--s:4%;cursor:default}
+.tile.hot{box-shadow:inset 0 0 0 2px var(--hl);z-index:2}
+.tile.sel{box-shadow:inset 0 0 0 2px var(--hl);z-index:3}
+.tile.picked{outline:2px solid var(--accent);outline-offset:-2px;z-index:3}
+.tile.picked::after{content:"";position:absolute;inset:0;background:var(--accent-soft);pointer-events:none}
+.lb{position:absolute;left:8px;right:4px;top:4px;font-size:12px;line-height:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.lb small{display:block;font-size:11px;font-weight:400;color:var(--tile-sub);overflow:hidden;text-overflow:ellipsis}
+.hd{position:absolute;left:8px;right:8px;top:2px;height:16px;font-size:12px;font-weight:500;line-height:16px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.hd small{margin-left:8px;font-size:11px;font-weight:400;color:var(--text2)}
+.tm-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted)}
+
+/* tables */
+table.grid{width:100%;border-collapse:collapse;table-layout:fixed}
+.grid th{position:sticky;top:0;z-index:1;background:var(--panel);text-align:left;font-size:12px;font-weight:500;color:var(--muted);height:36px;padding:0 8px;border-bottom:1px solid var(--line);white-space:nowrap;user-select:none}
+.grid th[data-k]{cursor:pointer}
+.grid th[data-k]:hover{color:var(--text)}
+.grid th.asc::after{content:" ↑"}.grid th.desc::after{content:" ↓"}
+.grid .num{text-align:right}
+.grid th:first-child,.grid td:first-child{padding-left:12px}
+.grid td{height:36px;padding:0 8px;border-bottom:1px solid var(--line2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.grid tbody tr{cursor:pointer;transition:transform .25s var(--ease),background-color 120ms var(--ease)}
+.grid tbody tr:focus{outline:none}
+.grid tbody tr:focus-visible{box-shadow:inset 2px 0 0 var(--accent);background:var(--raised)}
+.th-btn{all:unset;cursor:pointer}
+.th-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.grid tbody tr:hover,.grid tr.hot{background:var(--raised)}
+.grid tr.sel{background:var(--raised2)}
+.grid .ck{padding:0 0 0 12px;text-overflow:clip}
+.grid .ck+td,.grid .ck+th{padding-left:8px}
+input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;margin:0;vertical-align:middle;cursor:pointer}
+.grid tr.picked{background:var(--accent-soft)}
+.grid tr.more td{color:var(--muted);text-align:center;cursor:default;height:48px}
+.grid b{font-weight:500}
+.cn{display:flex;align-items:center;gap:8px;min-width:0}
+.nm{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sw{width:8px;height:8px;border-radius:2px;flex:none;background:hsl(var(--h) var(--s,var(--tile-s)) calc(var(--tile-l) + var(--dl,0%)))}
+.sz{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.bar{flex:1;max-width:40px;height:4px;border-radius:2px;background:var(--raised);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--muted)}
+.tag{font-size:11px;line-height:16px;padding:0 4px;border-radius:4px;background:var(--raised);color:var(--muted);flex:none}
+.tag.warn{color:var(--warn)}
+.acts{text-align:right;overflow:visible!important}
+.acts .ib{opacity:0;width:24px;height:24px;border-radius:6px}
+tr:hover .acts .ib,.hint:hover .ib,.acts .ib:focus-visible{opacity:1}
+.two{display:flex;flex-direction:column;min-width:0;line-height:16px}
+#topBody td{height:48px}
+.two .path{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis}
+
+/* types */
+.types{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+.types .panel{overflow:hidden}
+.ph{padding:16px 16px 8px}
+.ph h3{margin:0;font-size:14px;font-weight:600}
+.ph p{margin:4px 0 0;color:var(--muted);font-size:12px}
+.stack{display:flex;height:16px;border-radius:4px;overflow:hidden;margin:8px 16px 16px;gap:2px}
+.stack i{height:100%;min-width:2px;background:hsl(var(--h) var(--s,var(--tile-s)) var(--tile-l))}
+
+/* hints */
+.hint-total{color:var(--muted)}
+.hint-total b{font-size:20px;line-height:28px;font-weight:500;color:var(--text);margin-right:4px}
+.hint-list{display:flex;flex-direction:column;gap:8px}
+.hint{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.hint>input{flex:none}
+.hint.picked{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--panel))}
+.hint-main{flex:1;min-width:0}
+.hint-top{display:flex;align-items:baseline;gap:8px;min-width:0}
+.hint-label{font-weight:500;white-space:nowrap}
+.hint-path{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hint-desc{color:var(--text2)}
+.hint-size{font-size:14px;font-weight:500;white-space:nowrap}
+.hint-acts{display:flex;align-items:center;gap:4px}
+.hint .ib{opacity:.6}
+.hint-group{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.hint-group>.hint{border:0;background:none}
+.hint-group:not(.open) .gbody{display:none}
+.gbody .hint{border:0;border-top:1px solid var(--line2);border-radius:0;background:none;padding:8px 16px 8px 70px}
+.gtoggle svg{transition:transform .2s var(--ease)}
+.gtoggle[aria-expanded=true] svg{transform:rotate(90deg)}
+button.cmd{border:0;border-radius:4px;padding:0 4px;background:var(--raised);color:var(--text);font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:copy;transition:background-color 150ms var(--ease)}
+button.cmd:hover{background:var(--raised2)}
+
+/* batch pick bar */
+.pickbar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:40;width:min(760px,calc(100% - 32px));display:flex;flex-direction:column;gap:8px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--float-shadow);animation:rise .25s var(--ease)}
+@keyframes rise{from{opacity:0;transform:translate(-50%,8px)}}
+.pb-row{display:flex;align-items:center;gap:8px}
+.pb-count{flex:1;min-width:0;padding-left:8px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pb-count b{color:var(--text);font-weight:500}
+.seg{display:flex;gap:2px;padding:2px;border-radius:8px;background:var(--raised)}
+.seg button{height:24px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--text2);font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;transition:background-color 150ms var(--ease),color 150ms var(--ease)}
+.seg button.on{background:var(--panel);color:var(--text)}
+.seg button.on[data-mode=rm]{color:var(--danger)}
+.pb-pre{margin:0;max-height:40vh;overflow:auto;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--sunk);color:var(--text2);font:12px/20px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;user-select:text}
+body.has-picks .view{padding-bottom:80px}
+
+/* overlays */
+.overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:16px;background:var(--bg)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px 32px;width:min(560px,100%);text-align:center}
+.card h2{margin:8px 0 0;font-size:16px;line-height:24px;font-weight:500}
+.card p{margin:4px 0 0;color:var(--text2)}
+.platter{margin:0 auto 4px;font:11px/12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);white-space:pre;user-select:none}
+.acts-row{display:flex;justify-content:center;gap:8px;margin-top:16px}
+.tip{position:fixed;left:0;top:0;z-index:50;pointer-events:none;background:var(--tip-bg);color:var(--tip-text);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;line-height:16px;box-shadow:var(--float-shadow);max-width:340px}
+.tt-name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tt-row{display:flex;gap:8px;align-items:baseline;margin-top:4px}
+.tt-row span,.tt-sub{opacity:.7}
+.tt-hint{opacity:.5;font-size:11px;margin-top:4px}
+.modal-bg{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.4);display:grid;place-items:center;padding:16px}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--float-shadow);padding:20px 24px;width:min(440px,100%)}
+.modal h3{margin:0 0 4px;font-size:14px;font-weight:600;word-break:break-word}
+.modal p{margin:0 0 20px;color:var(--text2)}
+.modal .m-path{margin:0 0 8px;font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);word-break:break-all}
+.modal .m-warn{color:var(--danger)}
+.modal .row{display:flex;justify-content:flex-end;gap:8px}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:16px;background:var(--tip-bg);color:var(--tip-text);border:1px solid var(--line);padding:8px 16px;border-radius:8px;box-shadow:var(--float-shadow);max-width:min(560px,calc(100% - 32px))}
+.toast.err{background:var(--danger);border-color:transparent;color:#fff}
+.toast button{border:0;background:none;padding:0;color:inherit;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+body.has-picks .toast{bottom:88px}
+
+@media (max-width:980px){
+  .split{flex-direction:column}
+  .tm-wrap{flex:none;height:44vh}
+  .table-wrap{min-width:0;flex:1}
+  .types{grid-template-columns:1fr}
+  .vol{width:100%;margin-left:0}
+}
+@media (max-width:600px){
+  .summary,.ss-cur{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .treemap.anim .tile,.grid tbody tr{transition:none!important}
+  .enter{animation:none!important}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="11" height="20" rx="3" fill="#3d7eff"/><rect x="15" y="2" width="7" height="11" rx="2.5" fill="#85adff"/><rect x="15" y="15" width="7" height="7" rx="2.5" fill="#1f56c9"/></svg>
+    Disk Check
+  </div>
+  <form id="scanForm" class="scanbar">
+    <input id="pathInput" spellcheck="false" autocomplete="off" placeholder="Folder path" aria-label="Folder path">
+    <div class="split-btn">
+      <button class="btn primary" type="submit" id="scanBtn">Scan</button>
+      <button class="btn primary caret" type="button" id="scanMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Scan a place"></button>
+    </div>
+  </form>
+  <div class="vol" id="vol"></div>
+  <div class="hdr-acts"><button class="ib" id="diskBtn" title="Refresh free space"></button><button class="ib" id="keysBtn" title="Keyboard shortcuts (?)"></button></div>
+</header>
+<div class="menu" id="scanMenu" role="menu" hidden></div>
+<nav class="tabs" id="tabs" role="tablist">
+  <button data-tab="explore" class="on" role="tab" aria-selected="true">Explore</button>
+  <button data-tab="top" role="tab" aria-selected="false">Largest files</button>
+  <button data-tab="types" role="tab" aria-selected="false">File kinds</button>
+  <button data-tab="hints" role="tab" aria-selected="false">Cleanup hints <span class="count" id="hintBadge"></span></button>
+</nav>
+<div id="banner" class="banner" hidden></div>
+
+<main>
+  <section id="view-explore" class="view on">
+    <div class="crumbbar">
+      <button id="upBtn" class="ib" title="Up one level (Backspace)"></button>
+      <div id="crumbs" class="crumbs"></div>
+      <div id="summary" class="summary"></div>
+      <button class="ib" id="rescanBtn" title="Rescan this folder (R)"></button>
+      <div id="scanStat" class="scanstat" hidden>
+        <span class="trace" id="trace" aria-hidden="true"></span>
+        <span class="ss-cur" id="ssCur"></span>
+        <span class="ss-num"><b id="ssBytes"></b> · <span id="ssFiles"></span> · <span id="ssTime"></span></span>
+        <button class="btn sm" id="cancelBtn">Cancel</button>
+      </div>
+    </div>
+    <div class="split">
+      <div class="panel tm-wrap"><div id="tm" class="treemap" aria-hidden="true"></div><pre class="sweep" id="sweep" aria-hidden="true" hidden></pre></div>
+      <div class="panel table-wrap">
+        <table class="grid" id="exTable">
+          <colgroup><col style="width:32px"><col><col style="width:120px"><col style="width:60px"><col style="width:84px"><col style="width:96px"><col style="width:64px"></colgroup>
+          <thead><tr><th class="ck"><input type="checkbox" id="ckAll" aria-label="Select all"></th><th data-k="name" aria-sort="none"><button class="th-btn">Name</button></th><th data-k="size" class="num" aria-sort="descending"><button class="th-btn">Size</button></th><th class="num">%</th><th data-k="files" class="num" aria-sort="none"><button class="th-btn">Files</button></th><th data-k="mod" class="num" aria-sort="none"><button class="th-btn">Modified</button></th><th></th></tr></thead>
+          <tbody id="exBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-top" class="view">
+    <div class="panel table-wrap" style="min-width:0">
+      <table class="grid">
+        <colgroup><col style="width:32px"><col style="width:40px"><col><col style="width:100px"><col style="width:128px"><col style="width:112px"><col style="width:64px"></colgroup>
+        <thead><tr><th class="ck"><input type="checkbox" id="ckAllTop" aria-label="Select all"></th><th class="num">#</th><th>File</th><th class="num">Size</th><th>Kind</th><th class="num">Modified</th><th></th></tr></thead>
+        <tbody id="topBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="view-types" class="view scroll">
+    <div class="types">
+      <div class="panel">
+        <div class="ph"><h3>Space by kind</h3><p id="typesSub"></p></div>
+        <div class="stack" id="catStack"></div>
+        <table class="grid">
+          <colgroup><col><col style="width:100px"><col style="width:64px"><col style="width:96px"></colgroup>
+          <thead><tr><th>Kind</th><th class="num">Size</th><th class="num">%</th><th class="num">Files</th></tr></thead>
+          <tbody id="catBody"></tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="ph"><h3>Top extensions</h3></div>
+        <table class="grid">
+          <colgroup><col style="width:112px"><col><col style="width:96px"><col style="width:84px"><col style="width:88px"></colgroup>
+          <thead><tr><th>Extension</th><th>Kind</th><th class="num">Size</th><th class="num">Files</th><th class="num">Avg</th></tr></thead>
+          <tbody id="extBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-hints" class="view scroll">
+    <div class="hint-total" id="hintTotal"></div>
+    <div id="hintList" class="hint-list"></div>
+  </section>
+
+  <div id="empty" class="overlay" hidden>
+    <div class="card">
+      <pre class="platter" id="platter" aria-hidden="true"></pre>
+      <h2 id="emptyTitle"></h2>
+      <p id="emptyText"></p>
+      <div class="acts-row" id="emptyActs"><button class="btn" data-pick>Choose…</button><button class="btn primary" data-path="~">Scan home</button></div>
+    </div>
+  </div>
+</main>
+
+<div id="pickbar" class="pickbar" hidden>
+  <pre class="pb-pre" id="pbPre" hidden></pre>
+  <div class="pb-row">
+    <span class="pb-count"><b id="pbCount"></b> · <span id="pbBytes"></span></span>
+    <div class="seg" id="pbMode"><button data-mode="trash" class="on">trash</button><button data-mode="rm">rm -rf</button></div>
+    <button class="btn sm" id="pbView">Preview</button>
+    <button class="btn sm" id="pbRescan" hidden>Rescan</button>
+    <button class="btn sm" id="pbTrash">Move to Trash</button>
+    <button class="btn sm primary" id="pbCopy">Copy trash script</button>
+    <button class="ib" id="pbClear" title="Clear selection (Esc)"></button>
+  </div>
+</div>
+<div id="tip" class="tip" hidden></div>
+<div id="modal" class="modal-bg" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h3 id="mTitle"></h3><p class="m-path" id="mPath"></p><p id="mBody"></p><p class="m-warn" id="mWarn" hidden></p>
+    <div class="row"><button class="btn" id="mCancel">Cancel</button><button class="btn danger" id="mOk"></button></div>
+  </div>
+</div>
+<div id="keys" class="modal-bg" hidden>
+  <div class="modal keys" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="keysTitle">
+    <h3 id="keysTitle">Keyboard</h3>
+    <table>
+      <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Home</kbd> <kbd>End</kbd></td><td>Move through rows</td></tr>
+      <tr><td><kbd>Enter</kbd> <kbd>→</kbd></td><td>Open folder</td></tr>
+      <tr><td><kbd>←</kbd> <kbd>⌫</kbd></td><td>Up one level</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Pick</td></tr>
+      <tr><td><kbd>⇧</kbd> <kbd>Space</kbd> · <kbd>⇧</kbd> click</td><td>Pick a range</td></tr>
+      <tr><td><kbd>⌘</kbd> click</td><td>Pick a tile</td></tr>
+      <tr><td><kbd>⌘</kbd> <kbd>⌫</kbd></td><td>Move to Trash</td></tr>
+      <tr><td><kbd>R</kbd></td><td>Rescan this folder</td></tr>
+      <tr><td><kbd>⌘</kbd> <kbd>L</kbd> · <kbd>/</kbd></td><td>Path field</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close · clear picks</td></tr>
+      <tr><td><kbd>?</kbd></td><td>This list</td></tr>
+    </table>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="sr" class="sr-only" aria-live="polite"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+const HUES = [214, 158, 34, 268, 350, 190, 86, 312, 14, 244];
+const CAT_HUE = {'Video':4,'Audio':300,'Images':150,'Documents':212,'Archives':38,'Disk images':262,'Code':188,'Apps & libraries':334,'Data':96};
+const PLACES = [['Home','~'],['Downloads','~/Downloads'],['Documents','~/Documents'],['Desktop','~/Desktop'],['Library','~/Library'],['Applications','/Applications'],null,['Whole disk','/']];
+const TRACE_RAMP = ' .:-=+*#'; // the throughput meter reads as a meter, not letters
+const RAMP = ' .·:;-~=+*cxoO8%#&@'; // brightness ramp, dark → bright
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+// One line-icon set: 16px, 1.5 stroke, takes the color of its text role.
+const svg = (d, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICON = {
+  folder: svg('<path d="M2 4.5c0-.6.4-1 1-1h3l1.5 1.5H13c.6 0 1 .4 1 1V12c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/>'),
+  file: svg('<path d="M4.5 2h4.5l3 3v8.5c0 .3-.2.5-.5.5h-7c-.3 0-.5-.2-.5-.5V2.5c0-.3.2-.5.5-.5z"/><path d="M9 2v3h3"/>'),
+  reveal: svg('<path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M12 9.5V13c0 .3-.2.5-.5.5h-8c-.3 0-.5-.2-.5-.5V5c0-.3.2-.5.5-.5H7"/>', ''),
+  trash: svg('<path d="M2.5 4.5h11M6 4.5V3c0-.3.2-.5.5-.5h3c.3 0 .5.2.5.5v1.5M4 4.5l.7 8.6c0 .5.5.9 1 .9h4.6c.5 0 1-.4 1-.9l.7-8.6"/>', ''),
+  up: svg('<path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/>', ''),
+  alert: svg('<path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.5v.01"/>'),
+  x: svg('<path d="M4 4l8 8M12 4l-8 8"/>', ''),
+  chev: svg('<path d="M6 4l4 4-4 4"/>', 'sep'),
+  chevR: svg('<path d="M6 4l4 4-4 4"/>', ''),
+  down: svg('<path d="M4 6l4 4 4-4"/>', ''),
+  refresh: svg('<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.5 2v3h-3"/>', ''),
+  keys: svg('<rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 6.5h.01M6.5 6.5h.01M9 6.5h.01M11.5 6.5h.01M5 9.5h6"/>', ''),
+};
+
+const S = {
+  token: null, gen: null, status: null, cur: null, live: false, liveGen: null, liveT: 0,
+  sort: {k: 'size', d: -1}, tab: 'explore', sel: null, hot: null, hotEls: [],
+  idx: new Map(), keyById: new Map(), tileEl: new Map(), rowEl: new Map(),
+  colors: new Map(), kidN: new Map(), rootHue: 0, trace: [], lastRate: null, cache: {}, home: '',
+  picked: new Map(), mode: 'trash', script: null, scriptReq: 0, copied: false, anchor: null, focusKey: null, openGroups: new Set(), diskFree: null, diskDelta: null,
+};
+
+// ---------- formatting ----------
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const code = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+function fmtBytes(b) {
+  if (!b || b < 1000) return (b || 0) + ' B';
+  const u = ['KB','MB','GB','TB','PB']; let i = -1;
+  do { b /= 1000; i++ } while (b >= 1000 && i < u.length - 1);
+  return (b >= 100 ? b.toFixed(0) : b >= 10 ? b.toFixed(1) : b.toFixed(2)) + ' ' + u[i];
+}
+const nf = new Intl.NumberFormat();
+const fmtNum = n => nf.format(n || 0);
+const df = new Intl.DateTimeFormat(undefined, {year:'numeric', month:'short', day:'numeric'});
+const dfShort = new Intl.DateTimeFormat(undefined, {month:'short', day:'numeric'});
+function fmtDate(sec) {
+  if (!sec) return '';
+  const d = new Date(sec * 1000), now = new Date(), y = new Date(now - 864e5);
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return d.getFullYear() === now.getFullYear() ? dfShort.format(d) : df.format(d);
+}
+function fmtDur(ms) { const s = ms / 1000; return s < 60 ? s.toFixed(1) + 's' : Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's' }
+const pct = (a, b) => b > 0 ? a / b * 100 : 0;
+const fmtPct = p => p >= 10 ? p.toFixed(0) + '%' : p >= 0.1 ? p.toFixed(1) + '%' : p > 0 ? '<0.1%' : '0%';
+const pretty = p => S.home && (p === S.home || (p || '').startsWith(S.home + '/')) ? '~' + p.slice(S.home.length) : p;
+const catStyle = c => CAT_HUE[c] == null ? '--h:220;--s:8%' : `--h:${CAT_HUE[c]}`;
+
+// ---------- api ----------
+function readToken() {
+  const m = location.hash.match(/t=([0-9a-f]+)/);
+  if (m) { try { sessionStorage.setItem('dc-token', m[1]) } catch {} return m[1] }
+  try { return sessionStorage.getItem('dc-token') } catch { return null }
+}
+async function api(path, body) {
+  const opt = {headers: {'X-Token': S.token}};
+  if (body !== undefined) { opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body) }
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+// ---------- scan lifecycle ----------
+async function startScan(path) {
+  if (!path.trim()) return;
+  if (S.picked.size && !S.copied) {
+    const n = S.picked.size;
+    if (!await confirmModal({title: `Discard ${n} pick${n === 1 ? '' : 's'}?`, body: 'A new scan clears the selection', ok: 'Scan'})) return;
+  }
+  try { await api('/api/scan', {path}); S.gen = null; poll() }
+  catch (e) { toast(e.message, true) }
+}
+
+async function poll() {
+  clearTimeout(S.pollT);
+  const wantTree = !S.live || performance.now() - S.liveT > 900; // tree every ~1s, counters every 300ms
+  let st;
+  try { st = await api('/api/status' + (wantTree ? '?live=1' : '')) }
+  catch (e) { if (S.live) exitLive(); return showEmpty('Disk Check stopped', 'Restart it to continue') }
+  S.status = st; if (st.home) S.home = st.home;
+  renderVol(st);
+  if (st.state === 'scanning') {
+    if (!S.live || S.liveGen !== st.gen) enterLive(st);
+    updateLive(st);
+    S.pollT = setTimeout(poll, 300);
+    return;
+  }
+  const wasLive = S.live;
+  if (wasLive) exitLive();
+  if (st.state === 'done') {
+    $('#empty').hidden = true;
+    if (st.gen !== S.gen) {
+      S.gen = st.gen; S.cache = {}; S.sel = null;
+      $('#pathInput').value = pretty(st.root); updateScanBtn();
+      if (wasLive) $('#sr').textContent = `Scan finished: ${fmtBytes(st.bytes)} in ${fmtNum(st.files)} files`;
+      renderBanner(st);
+      await go(0, 'replace', null, false, wasLive);
+      refreshHintBadge();
+      if (S.tab !== 'explore') loadTab(S.tab);
+    }
+  } else if (st.state === 'error') showEmpty("Can't scan that folder", st.error, true);
+  else if (st.state === 'cancelled') showEmpty('Scan cancelled', '', true);
+  else showEmpty('Pick a folder', '', true);
+}
+
+function enterLive(st) {
+  Object.assign(S, {live: true, liveGen: st.gen, gen: null, cur: null, cache: {}, sel: null, trace: [], lastRate: null, colors: new Map(), kidN: new Map(), rootHue: 0});
+  $('#empty').hidden = true; $('#banner').hidden = true; $('#hintBadge').textContent = '';
+  $('#pathInput').value = pretty(st.root); updateScanBtn();
+  $('#view-explore').classList.add('live');
+  $$('#tabs [data-tab]').forEach(b => b.disabled = b.dataset.tab !== 'explore');
+  if (S.tab !== 'explore') setTab('explore');
+  $('#summary').hidden = true; $('#scanStat').hidden = false; $('#upBtn').disabled = true;
+  $('#crumbs').innerHTML = `<span class="crumb cur">${esc(pretty(st.root))}</span>`;
+  clearTreemap(); $('#exBody').replaceChildren(); S.rowEl = new Map();
+  S.picked.clear(); syncPicks(); startSweep();
+}
+function updateLive(st) {
+  $('#ssBytes').textContent = fmtBytes(st.bytes);
+  $('#ssFiles').textContent = fmtNum(st.files) + ' files';
+  $('#ssTime').textContent = fmtDur(st.elapsedMs);
+  $('#ssCur').textContent = '‎' + pretty(st.current || '') + '‎';
+  pushTrace(st);
+  if (!st.live) return;
+  S.liveT = performance.now();
+  const view = {live: true, path: st.root, node: {name: st.root, size: st.live.size, files: st.live.files},
+    crumbs: [{name: st.root}], children: st.live.children || [], more: st.live.more || 0, moreSize: st.live.moreSize || 0};
+  const first = !S.cur;
+  prepare(view);
+  S.cur = view;
+  renderTable(!first); drawTreemap(!first); rehot();
+}
+function exitLive() {
+  S.live = false;
+  $('#view-explore').classList.remove('live');
+  $$('#tabs [data-tab]').forEach(b => b.disabled = false);
+  $('#scanStat').hidden = true; $('#summary').hidden = false;
+}
+
+// Throughput trace: files/s per tick, drawn with the brightness ramp, newest on the right.
+function pushTrace(st) {
+  const N = 24, last = S.lastRate;
+  if (last && st.elapsedMs > last.t) S.trace.push((st.files - last.f) / (st.elapsedMs - last.t));
+  S.lastRate = {t: st.elapsedMs, f: st.files};
+  if (S.trace.length > N) S.trace.splice(0, S.trace.length - N);
+  const max = Math.max(1e-9, ...S.trace), L = TRACE_RAMP.length - 1, pad = N - S.trace.length;
+  let out = ' '.repeat(pad);
+  for (const v of S.trace) out += TRACE_RAMP[Math.max(1, Math.round(Math.sqrt(v / max) * L))];
+  $('#trace').textContent = out;
+}
+
+// ASCII disk platter for empty states: tracks, a rotating sheen, the hub and a read head.
+function platterFrame(t) {
+  const cols = 46, rows = 21, cx = (cols - 1) / 2, cy = (rows - 1) / 2, ay = 1.9, R = Math.min(cx, cy * ay) - .5, L = RAMP.length - 1;
+  const hx = Math.cos(.62), hy = Math.sin(.62);
+  let out = '';
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const dx = x - cx, dy = (y - cy) * ay, r = Math.hypot(dx, dy);
+      if (r > R) { out += ' '; continue }
+      const a = Math.atan2(dy, dx), u = r / R;
+      let v;
+      if (u < .09) v = 0;
+      else if (u < .2) v = .72;
+      else {
+        v = .16 + .09 * Math.cos(r * 2.3)
+          + .62 * Math.max(0, Math.cos(a - t)) ** 10 * u
+          + .3 * Math.max(0, Math.cos(a - t + Math.PI)) ** 14 * u;
+        if (u > .95) v = .5;
+      }
+      const along = dx * hx + dy * hy;
+      if (along > R * .5 && along < R * 1.05 && Math.abs(dy * hx - dx * hy) < .55) v = .92;
+      out += RAMP[Math.max(0, Math.min(L, Math.round(v * L)))];
+    }
+    out += '\n';
+  }
+  return out;
+}
+function startPlatter() {
+  const el = $('#platter');
+  cancelAnimationFrame(S.platRaf);
+  el.textContent = platterFrame(.8);
+  if (reduceMotion.matches) return;
+  let last = 0;
+  const tick = ts => {
+    if ($('#empty').hidden) return;
+    if (ts - last > 66) { last = ts; el.textContent = platterFrame(ts / 900) }
+    S.platRaf = requestAnimationFrame(tick);
+  };
+  S.platRaf = requestAnimationFrame(tick);
+}
+
+function showEmpty(title, text = '', actions = false) {
+  $('#empty').hidden = false;
+  $('#emptyTitle').textContent = title;
+  $('#emptyText').textContent = text; $('#emptyText').hidden = !text;
+  $('#emptyActs').hidden = !actions;
+  startPlatter();
+}
+function renderVol(st) {
+  const v = st.volume, el = $('#vol');
+  if (!v || !v.total) { el.innerHTML = ''; return }
+  const used = v.total - v.free;
+  el.title = `${fmtBytes(used)} used`;
+  const u = pct(used, v.total), d = S.diskDelta;
+  if (S.diskFree == null) S.diskFree = v.free;
+  const delta = d == null ? '' : d === 0 ? '<span class="vdelta same">no change</span>'
+    : `<span class="vdelta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : '−'}${fmtBytes(Math.abs(d))}</span>`;
+  el.innerHTML = `<div class="vrow"><span><b>${fmtBytes(v.free)}</b> free${delta}</span><span>${fmtBytes(v.total)}</span></div><div class="vbar${u >= 95 ? ' crit' : u >= 85 ? ' warn' : ''}"><i style="width:${u.toFixed(1)}%"></i></div>`;
+}
+function renderBanner(st) {
+  const b = $('#banner');
+  if (!st.errors) { b.hidden = true; return }
+  b.innerHTML = `${ICON.alert}<span title="${esc((st.errSamples || []).map(pretty).join('\n'))}">${fmtNum(st.errors)} unreadable item${st.errors > 1 ? 's' : ''}, totals may be low</span>
+    <button class="btn sm" id="fdaBtn">Grant Full Disk Access</button><button class="ib" id="bannerX" title="Dismiss">${ICON.x}</button>`;
+  b.hidden = false;
+  $('#fdaBtn').onclick = () => api('/api/fda', {}).catch(e => toast(e.message, true));
+  $('#bannerX').onclick = () => { b.hidden = true; drawTreemap() };
+}
+
+// ---------- explore ----------
+// Keys are names, so the same folder keeps its tile and row across live ticks and the final result.
+// Colors are decided once per path and cached for the whole scan: top-level folders get distinct hues,
+// a folder's children get shades around its hue. Sub-tiles are drawn in the colors they will have
+// after drilling in, so entering or leaving a folder never repaints what was already on screen.
+const SPREAD_H = [0, 20, -20, 40, -40, 10, -30, 30, -10, 50, -50];
+const SPREAD_L = [0, 8, -7, 13, -11, 4, -4, 10, -9, 6, -6];
+const joinP = (a, b) => a.endsWith('/') ? a + b : a + '/' + b;
+function colorFor(parentPath, parent, name) {
+  const key = joinP(parentPath, name);
+  let c = S.colors.get(key);
+  if (!c) {
+    if (parent) {
+      // Next unused shade for this folder, so siblings never share one (largest child gets the parent's hue).
+      const j = S.kidN.get(parentPath) || 0, n = SPREAD_H.length;
+      S.kidN.set(parentPath, j + 1);
+      c = {h: (parent.h + SPREAD_H[j % n] + 360) % 360,
+           dl: Math.max(-14, Math.min(14, Math.round(parent.dl * .4) + SPREAD_L[(j + Math.floor(j / n) * 4) % n]))};
+    } else {
+      c = {h: HUES[S.rootHue % HUES.length], dl: (Math.floor(S.rootHue / HUES.length) % 3) * -7};
+      S.rootHue++;
+    }
+    S.colors.set(key, c);
+  }
+  return c;
+}
+// Color of the folder being viewed (null at the scan root). Derived along the breadcrumb path,
+// so jumping straight into a deep folder still lands on its family's hue.
+function pathColor(view) {
+  let p = view.crumbs[0].name, col = null;
+  for (const c of view.crumbs.slice(1)) { col = colorFor(p, col, c.name); p = joinP(p, c.name) }
+  return col;
+}
+function prepare(view) {
+  view.children.sort((a, b) => b.size - a.size);
+  const base = pathColor(view);
+  S.idx = new Map(); S.keyById = new Map();
+  view.children.forEach(c => {
+    c.key = 'n:' + c.name;
+    c.col = colorFor(view.path, base, c.name);
+    c.path = joinP(view.path, c.name);
+    S.idx.set(c.key, {n: c});
+    if (c.id != null) S.keyById.set(c.id, c.key);
+    const cp = joinP(view.path, c.name);
+    (c.kids || []).sort((a, b) => b.size - a.size).forEach(k => {
+      k.key = c.key + '/' + k.name;
+      k.col = colorFor(cp, c.col, k.name);
+      k.path = joinP(cp, k.name);
+      S.idx.set(k.key, {n: k, parent: c});
+      if (k.id != null) S.keyById.set(k.id, k.key);
+    });
+  });
+}
+const colStyle = c => `--h:${c.h};--dl:${c.dl}%`;
+
+async function go(id, mode, selId = null, quiet = false, animate = false) {
+  let d;
+  try { d = await api('/api/node?id=' + id) }
+  catch (e) { if (!quiet) { if (id !== 0) return go(0, 'replace'); toast(e.message, true) } return false }
+  const old = S.cur, same = animate || (old && old.path === d.path);
+  const kbd = $('#exBody').contains(document.activeElement);
+  const leftSeg = old && under(d.path, old.path) ? seg(d.path, old.path) : null;
+  const oldRects = new Map();
+  if (old && !same) for (const [k, t] of S.tileEl) oldRects.set(k, rectOf(t));
+  prepare(d);
+  S.cur = d; S.sel = selId;
+  if (mode === 'replace') history.replaceState({id, gen: S.gen}, '');
+  else if (mode !== 'pop') history.pushState({id, gen: S.gen}, '');
+  renderCrumbs(); renderTable(same); drawTreemap(same);
+  if (old && !same) zoom(old.path, d.path, oldRects);
+  if (kbd && !same) focusRow($('#exBody'), (leftSeg && S.rowEl.get('n:' + leftSeg)) || rowsOf($('#exBody'))[0]);
+  if (selId != null) S.rowEl.get(S.keyById.get(selId))?.scrollIntoView({block: 'center'});
+  return true;
+}
+
+// Enter/exit motion: drilling in grows the new view out of the tile that was clicked,
+// going up shrinks the view back into its tile in the parent. Anything else crossfades.
+const rectOf = t => ({x: t.offsetLeft, y: t.offsetTop, w: t.offsetWidth, h: t.offsetHeight});
+const under = (a, b) => b !== a && b.startsWith(a.endsWith('/') ? a : a + '/');
+const seg = (a, b) => b.slice(a.length).replace(/^\//, '').split('/')[0];
+function zoom(from, to, oldRects) {
+  if (reduceMotion.matches || !from) return;
+  const tm = $('#tm'), W = tm.clientWidth, H = tm.clientHeight, easing = 'cubic-bezier(.22,1,.36,1)';
+  let r = null, dir = 0;
+  if (under(from, to)) { r = oldRects.get('n:' + seg(from, to)); dir = 1 }
+  else if (under(to, from)) { const t = S.tileEl.get('n:' + seg(to, from)); if (t) r = rectOf(t); dir = -1 }
+  if (r && r.w > 1 && r.h > 1 && W && H) {
+    const shrunk = `translate(${r.x}px,${r.y}px) scale(${r.w / W},${r.h / H})`;
+    const grown = `scale(${W / r.w},${H / r.h}) translate(${-r.x}px,${-r.y}px)`;
+    tm.animate([{transform: dir > 0 ? shrunk : grown, opacity: .4}, {transform: 'none', opacity: 1}], {duration: 240, easing});
+  } else {
+    tm.animate([{opacity: 0}, {opacity: 1}], {duration: 160, easing});
+  }
+  $('#exBody').animate([{opacity: 0, transform: `translateX(${dir * 12}px)`}, {opacity: 1, transform: 'none'}], {duration: 180, easing});
+}
+function goUp() { const c = S.cur?.crumbs; if (!S.live && c && c.length > 1) go(c[c.length - 2].id) }
+
+function renderCrumbs() {
+  const d = S.cur, last = d.crumbs.length - 1;
+  $('#crumbs').innerHTML = d.crumbs.map((c, i) => {
+    const name = esc(i === 0 ? pretty(c.name) : c.name);
+    return i === last ? `<span class="crumb cur">${name}</span>` : `<button class="crumb" data-id="${c.id}">${name}</button>${ICON.chev}`;
+  }).join('');
+  $('#crumbs').scrollLeft = 1e6;
+  $('#upBtn').disabled = last < 1;
+  const n = d.node, st = S.status;
+  $('#summary').innerHTML = `<b>${fmtBytes(n.size)}</b> · ${fmtNum(n.files)} files`;
+  $('#summary').title = st?.elapsedMs ? `Scanned in ${fmtDur(st.elapsedMs)}` : '';
+}
+
+function sortRows(rows) {
+  const {k, d} = S.sort;
+  const f = k === 'name' ? (a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}) : (a, b) => (a[k] || 0) - (b[k] || 0);
+  return rows.slice().sort((a, b) => f(a, b) * d || b.size - a.size);
+}
+const actBtns = (n = {}) => `<button class="ib" data-act="reveal" title="Show in Finder">${ICON.reveal}</button>` +
+  (n.prot === 2 ? '' : `<button class="ib danger" data-act="trash" title="Move to Trash${n.prot ? ' (personal folder)' : ''}">${ICON.trash}</button>`);
+function rowHTML(c, total, live) {
+  const p = pct(c.size, total);
+  const ck = live ? '' : `<input type="checkbox" data-ck aria-label="Select ${esc(c.name)}"${isPicked(c.id) ? ' checked' : ''}${c.prot ? ' disabled title="Protected"' : ''}>`;
+  return `<td class="ck">${ck}</td><td><div class="cn"><span class="sw" style="${colStyle(c.col)}"></span>${c.dir ? ICON.folder : ICON.file}<span class="nm" title="${esc(c.name)}">${esc(c.name)}</span>${c.err ? '<span class="tag warn">no access</span>' : ''}${c.skip ? '<span class="tag">not scanned</span>' : ''}</div></td>
+<td class="num"><div class="sz"><span class="bar"><i style="width:${(c.size ? Math.max(p, 1.5) : 0).toFixed(1)}%"></i></span>${fmtBytes(c.size)}</div></td>
+<td class="num muted">${fmtPct(p)}</td>
+<td class="num muted">${c.dir ? fmtNum(c.files) : ''}</td>
+<td class="num muted">${fmtDate(c.mod)}</td>
+<td class="acts">${live ? '' : actBtns(c)}</td>`;
+}
+function noteRow(text) { const tr = document.createElement('tr'); tr.className = 'more'; tr.innerHTML = `<td colspan="7">${text}</td>`; return tr }
+
+// Rows are reused by key; when order changes they slide to their new place (FLIP).
+function renderTable(animate = false) {
+  const body = $('#exBody'), d = S.cur, total = d.node.size;
+  const anim = animate && !reduceMotion.matches;
+  const before = new Map();
+  if (anim) for (const [k, tr] of S.rowEl) before.set(k, tr.getBoundingClientRect().top);
+  const next = new Map(), frag = document.createDocumentFragment();
+  for (const c of sortRows(d.children)) {
+    let tr = S.rowEl.get(c.key);
+    if (!tr) { tr = document.createElement('tr'); tr.dataset.k = c.key; if (anim) tr.classList.add('enter') }
+    const h = rowHTML(c, total, d.live);
+    if (tr._h !== h) { tr.innerHTML = h; tr._h = h }
+    tr.classList.toggle('dir', !!c.dir);
+    tr.classList.toggle('sel', c.id != null && S.sel === c.id);
+    tr.classList.toggle('picked', isPicked(c.id));
+    next.set(c.key, tr); frag.appendChild(tr);
+  }
+  if (d.more) frag.appendChild(noteRow(`+ ${fmtNum(d.more)} smaller items · ${fmtBytes(d.moreSize)}`));
+  if (!d.children.length && !d.live) frag.appendChild(noteRow(d.node.err ? 'No permission to read this folder' : d.node.skip ? 'Not scanned' : 'Empty folder'));
+  body.replaceChildren(frag);
+  S.rowEl = next;
+  for (const tr of next.values()) tr.tabIndex = -1;
+  const ft = next.get(S.focusKey) || next.values().next().value;
+  if (ft) ft.tabIndex = 0;
+  if (anim && before.size) {
+    const moved = [];
+    for (const [k, tr] of next) {
+      const y0 = before.get(k); if (y0 == null) continue;
+      const dy = y0 - tr.getBoundingClientRect().top;
+      if (Math.abs(dy) > 1) { tr.style.transition = 'none'; tr.style.transform = `translateY(${dy}px)`; moved.push(tr) }
+    }
+    if (moved.length) { body.offsetHeight; for (const tr of moved) { tr.style.transition = ''; tr.style.transform = '' } }
+  }
+  updateCkAll();
+  $$('#exTable th[data-k]').forEach(th => {
+    const on = th.dataset.k === S.sort.k;
+    th.classList.toggle('asc', on && S.sort.d > 0);
+    th.classList.toggle('desc', on && S.sort.d < 0);
+    th.setAttribute('aria-sort', on ? (S.sort.d > 0 ? 'ascending' : 'descending') : 'none');
+  });
+}
+
+// squarified treemap (Bruls, Huizing, van Wijk). vals must be > 0, ideally sorted desc.
+function squarify(vals, x, y, w, h) {
+  const out = new Array(vals.length);
+  let total = 0; for (const v of vals) total += v;
+  if (total <= 0 || w <= 0 || h <= 0) return out;
+  const scale = w * h / total;
+  let i = 0;
+  while (i < vals.length) {
+    const side = Math.min(w, h);
+    if (side <= 0) break;
+    let j = i, sum = 0, mn = Infinity, mx = 0, best = Infinity;
+    while (j < vals.length) {
+      const a = vals[j] * scale, s2 = sum + a, mn2 = Math.min(mn, a), mx2 = Math.max(mx, a);
+      const r = Math.max(side * side * mx2 / (s2 * s2), s2 * s2 / (side * side * mn2));
+      if (j > i && r > best) break;
+      sum = s2; mn = mn2; mx = mx2; best = r; j++;
+    }
+    if (w >= h) {
+      const cw = sum / h; let yy = y;
+      for (let k = i; k < j; k++) { const ch = vals[k] * scale / cw; out[k] = {x, y: yy, w: cw, h: ch}; yy += ch }
+      x += cw; w -= cw;
+    } else {
+      const rh = sum / w; let xx = x;
+      for (let k = i; k < j; k++) { const cw = vals[k] * scale / rh; out[k] = {x: xx, y, w: cw, h: rh}; xx += cw }
+      y += rh; h -= rh;
+    }
+    i = j;
+  }
+  return out;
+}
+function snap(r, gap) {
+  const x0 = Math.round(r.x), y0 = Math.round(r.y);
+  return {x: x0, y: y0, w: Math.round(r.x + r.w) - x0 - gap, h: Math.round(r.y + r.h) - y0 - gap};
+}
+const labelHTML = (n, b) => b.w < 36 || b.h < 16 ? '' : esc(n.name) + (b.h >= 32 && b.w >= 50 ? `<small>${fmtBytes(n.size)}</small>` : '');
+
+// Keyed tile DOM: tiles are reused across updates so live growth animates instead of re-rendering.
+function clearTreemap() { const el = $('#tm'); el.replaceChildren(); el._tiles = new Map(); S.tileEl = new Map() }
+function upsert(parent, key) {
+  let t = parent._tiles.get(key);
+  if (!t) { t = document.createElement('div'); t.dataset.k = key; t._tiles = new Map(); t._new = true; parent.appendChild(t); parent._tiles.set(key, t) }
+  t._seen = true;
+  return t;
+}
+function sweep(parent) {
+  for (const [k, t] of parent._tiles) {
+    if (t._seen) t._seen = false;
+    else { t.remove(); parent._tiles.delete(k) }
+  }
+}
+function place(t, b, x, y) { const s = t.style; s.left = x + 'px'; s.top = y + 'px'; s.width = b.w + 'px'; s.height = b.h + 'px' }
+function setLabel(t, cls, html) {
+  if (t._lb === cls + html) return;
+  t._lb = cls + html;
+  if (!html) { t._lbEl?.remove(); t._lbEl = null; return }
+  if (!t._lbEl) { t._lbEl = document.createElement('div'); t.prepend(t._lbEl) }
+  t._lbEl.className = cls; t._lbEl.innerHTML = html;
+}
+function tileClass(t, n, extra, anim) {
+  t.className = 'tile' + extra + (n.id != null && S.sel === n.id ? ' sel' : '') + (isPicked(n.id) ? ' picked' : '') + (t._new && anim ? ' enter' : '');
+  t._new = false;
+  t.dataset.dir = n.dir ? 1 : 0;
+  if (n.id != null) t.dataset.id = n.id; else delete t.dataset.id;
+}
+function drawTile(parent, c, r, anim) {
+  const b = snap(r, 2);
+  if (b.w < 2 || b.h < 2) return;
+  const t = upsert(parent, c.key);
+  const kids = c.dir && c.kids?.length && b.w >= 30 && b.h >= 30 ? c.kids : null;
+  tileClass(t, c, kids ? ' box' : '', anim);
+  place(t, b, b.x, b.y);
+  t.style.setProperty('--h', c.col.h); t.style.setProperty('--dl', c.col.dl + '%');
+  if (!kids) { setLabel(t, 'lb', labelHTML(c, b)); sweep(t); return }
+  const head = b.h >= 44 && b.w >= 56 ? 19 : 3;
+  setLabel(t, 'hd', head > 3 ? `${esc(c.name)}<small>${fmtBytes(c.size)}</small>` : '');
+  const vals = kids.map(k => k.size);
+  const rest = c.size - vals.reduce((a, v) => a + v, 0);
+  if (rest > 0) vals.push(rest);
+  const sub = squarify(vals, 0, 0, b.w - 5, b.h - head - 2);
+  kids.forEach((k, j) => {
+    if (!sub[j]) return;
+    const s = snap(sub[j], 1);
+    if (s.w < 2 || s.h < 2) return;
+    const kt = upsert(t, k.key);
+    tileClass(kt, k, '', anim);
+    place(kt, s, 3 + s.x, head + s.y);
+    kt.style.setProperty('--h', k.col.h); kt.style.setProperty('--dl', k.col.dl + '%');
+    setLabel(kt, 'lb', labelHTML(k, s));
+  });
+  sweep(t);
+}
+function drawTreemap(animate = false) {
+  const el = $('#tm'), W = el.clientWidth, H = el.clientHeight;
+  if (!el._tiles || !animate) clearTreemap();
+  const anim = animate && !reduceMotion.matches;
+  el.classList.toggle('anim', anim);
+  el.querySelector('.tm-empty')?.remove();
+  if (!S.cur || W < 10 || H < 10) return;
+  const items = S.cur.children.filter(c => c.size > 0);
+  const vals = items.map(c => c.size);
+  if (S.cur.moreSize > 0) vals.push(S.cur.moreSize);
+  if (!vals.length) {
+    clearTreemap();
+    if (!S.cur.live) el.insertAdjacentHTML('beforeend', '<div class="tm-empty">Nothing here takes up space</div>');
+    return;
+  }
+  const rects = squarify(vals, 0, 0, W + 2, H + 2);
+  items.forEach((c, i) => rects[i] && drawTile(el, c, rects[i], anim));
+  if (S.cur.moreSize > 0) {
+    const b = snap(rects[vals.length - 1], 2);
+    if (b.w >= 2 && b.h >= 2) {
+      const t = upsert(el, '_more');
+      t.className = 'tile more'; place(t, b, b.x, b.y);
+      setLabel(t, 'lb', labelHTML({name: fmtNum(S.cur.more) + ' smaller items', size: S.cur.moreSize}, b));
+    }
+  }
+  sweep(el);
+  S.tileEl = new Map();
+  for (const t of el.querySelectorAll('.tile[data-k]')) S.tileEl.set(t.dataset.k, t);
+}
+
+function setHot(key, tileEl) {
+  if (S.hot === key) return;
+  S.hot = key;
+  for (const x of S.hotEls) x.classList.remove('hot');
+  S.hotEls = [];
+  if (key == null) return;
+  const info = S.idx.get(key);
+  for (const x of [tileEl || S.tileEl.get(key), S.rowEl.get(info?.parent ? info.parent.key : key)]) {
+    if (x) { x.classList.add('hot'); S.hotEls.push(x) }
+  }
+}
+function rehot() { const k = S.hot; S.hot = null; S.hotEls = []; if (k != null && S.idx.has(k)) setHot(k) }
+function select(id) {
+  S.sel = id;
+  $$('#tm .sel, #exBody .sel').forEach(x => x.classList.remove('sel'));
+  const key = S.keyById.get(id);
+  for (const x of [S.tileEl.get(key), S.rowEl.get(key)]) x?.classList.add('sel');
+}
+function showTip(e, key) {
+  const tip = $('#tip'), info = S.idx.get(key);
+  if (!info) return hideTip();
+  if (tip.dataset.k !== key || S.live) {
+    const n = info.n, cur = S.cur.node;
+    tip.innerHTML = `<div class="tt-name">${esc(n.name)}</div>
+      <div class="tt-row"><b>${fmtBytes(n.size)}</b><span>${fmtPct(pct(n.size, cur.size))}</span>${n.dir ? `<span>${fmtNum(n.files)} files</span>` : ''}</div>
+      ${info.parent ? `<div class="tt-sub">in ${esc(info.parent.name)}</div>` : ''}
+      ${S.live || n.id == null ? '' : '<div class="tt-hint">⌘-click to pick</div>'}`;
+    tip.dataset.k = key; tip.hidden = false;
+  }
+  const pad = 14, tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + tw > innerWidth - 8) x = e.clientX - tw - pad;
+  if (y + th > innerHeight - 8) y = e.clientY - th - pad;
+  tip.style.transform = `translate(${x}px,${y}px)`;
+}
+function hideTip() { const t = $('#tip'); t.hidden = true; t.dataset.k = '' }
+
+// ---------- other tabs ----------
+function setTab(t) {
+  S.tab = t;
+  $$('#tabs [data-tab]').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on) });
+  $$('.view').forEach(v => v.classList.toggle('on', v.id === 'view-' + t));
+  hideTip();
+  if (t !== 'explore') loadTab(t);
+}
+async function loadTab(t) {
+  if (S.gen == null) return;
+  try {
+    if (t === 'top') renderTop(S.cache.top ??= await api('/api/top'));
+    if (t === 'types') renderTypes(S.cache.types ??= await api('/api/types'));
+    if (t === 'hints') renderHints(S.cache.hints ??= await api('/api/hints'));
+  } catch (e) { toast(e.message, true) }
+}
+async function refreshHintBadge() {
+  try { S.cache.hints ??= await api('/api/hints'); $('#hintBadge').textContent = S.cache.hints.length || '' } catch {}
+}
+
+function renderTop(rows) {
+  for (const r of rows) r.path = joinP(r.folder, r.name);
+  $('#topBody').innerHTML = rows.length ? rows.map((r, i) => `<tr data-id="${r.id}" tabindex="${i ? -1 : 0}"${isPicked(r.id) ? ' class="picked"' : ''}>
+<td class="ck"><input type="checkbox" data-ck aria-label="Select ${esc(r.name)}"${isPicked(r.id) ? ' checked' : ''}></td>
+<td class="num muted">${i + 1}</td>
+<td><div class="cn"><span class="sw" style="${catStyle(r.cat)}"></span><div class="two"><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><span class="path" title="${esc(r.folder)}">${esc(pretty(r.folder))}</span></div></div></td>
+<td class="num"><b>${fmtBytes(r.size)}</b></td>
+<td class="muted">${esc(r.cat)}</td>
+<td class="num muted">${fmtDate(r.mod)}</td>
+<td class="acts">${actBtns(r)}</td></tr>`).join('') : '<tr class="more"><td colspan="7">No files</td></tr>';
+  updateCkAll();
+}
+
+function renderTypes({cats, exts}) {
+  const total = cats.reduce((a, c) => a + c.size, 0);
+  $('#typesSub').textContent = `${fmtBytes(total)} · ${fmtNum(cats.reduce((a, c) => a + c.count, 0))} files`;
+  $('#catStack').innerHTML = cats.filter(c => c.size > 0).map(c => `<i style="width:${pct(c.size, total)}%;${catStyle(c.name)}" title="${esc(c.name)} · ${fmtBytes(c.size)}"></i>`).join('');
+  $('#catBody').innerHTML = cats.map(c => `<tr><td><div class="cn"><span class="sw" style="${catStyle(c.name)}"></span>${esc(c.name)}</div></td><td class="num"><b>${fmtBytes(c.size)}</b></td><td class="num muted">${fmtPct(pct(c.size, total))}</td><td class="num muted">${fmtNum(c.count)}</td></tr>`).join('');
+  $('#extBody').innerHTML = exts.map(e => `<tr><td><b>${esc(e.name)}</b></td><td><div class="cn"><span class="sw" style="${catStyle(e.cat)}"></span><span class="muted">${esc(e.cat)}</span></div></td><td class="num">${fmtBytes(e.size)}</td><td class="num muted">${fmtNum(e.count)}</td><td class="num muted">${fmtBytes(Math.round(e.size / Math.max(e.count, 1)))}</td></tr>`).join('');
+}
+
+// Commands in hint copy are chips that copy themselves.
+const cmdHTML = s => esc(s).replace(/`([^`]+)`/g, (_, c) => `<button class="cmd" data-copy="${c}" title="Copy">${c}</button>`);
+function hintCard(h, full) {
+  const ck = `<input type="checkbox" data-ck aria-label="Select ${esc(h.path)}"${isPicked(h.id) ? ' checked' : ''}${h.prot ? ' disabled title="Protected"' : ''}>`;
+  const main = full
+    ? `<div class="hint-top"><span class="hint-label">${esc(h.label)}</span><span class="hint-path" title="${esc(h.path)}">${esc(pretty(h.path))}</span></div><div class="hint-desc">${cmdHTML(h.desc)}</div>`
+    : `<div class="hint-path" title="${esc(h.path)}">${esc(pretty(h.path))}</div>`;
+  const acts = (h.dir ? '<button class="btn sm" data-act="open">Open</button>' : '') + `<button class="ib" data-act="reveal" title="Show in Finder">${ICON.reveal}</button>` +
+    (h.kind === 'cmd' || h.prot === 2 ? '' : `<button class="ib danger" data-act="trash" title="Move to Trash">${ICON.trash}</button>`);
+  return `<div class="hint${isPicked(h.id) ? ' picked' : ''}" data-id="${h.id}">${ck}<div class="hint-main">${main}</div><div class="hint-size">${fmtBytes(h.size)}</div><div class="hint-acts">${acts}</div></div>`;
+}
+function renderHints(rows) {
+  const total = rows.filter(h => h.kind !== 'review').reduce((a, h) => a + h.size, 0);
+  $('#hintTotal').innerHTML = rows.length ? `<b>${fmtBytes(total)}</b> reclaimable` : '';
+  const groups = new Map();
+  for (const h of rows) { if (!groups.has(h.label)) groups.set(h.label, []); groups.get(h.label).push(h) }
+  const sum = items => items.reduce((a, h) => a + h.size, 0);
+  $('#hintList').innerHTML = rows.length ? [...groups].sort((a, b) => sum(b[1]) - sum(a[1])).map(([label, items]) => {
+    if (items.length === 1) return hintCard(items[0], true);
+    const open = S.openGroups.has(label);
+    return `<div class="hint-group${open ? ' open' : ''}" data-label="${esc(label)}">
+  <div class="hint ghead"><input type="checkbox" data-gck aria-label="Select all ${esc(label)}"><button class="ib gtoggle" aria-expanded="${open}" aria-label="Show ${items.length} folders">${ICON.chevR}</button>
+  <div class="hint-main"><div class="hint-top"><span class="hint-label">${esc(label)}</span><span class="hint-path">${items.length} folders</span></div><div class="hint-desc">${cmdHTML(items[0].desc)}</div></div>
+  <div class="hint-size">${fmtBytes(sum(items))}</div></div>
+  <div class="gbody">${items.map(h => hintCard(h, false)).join('')}</div></div>`;
+  }).join('') : '<p class="muted">Nothing to clean</p>';
+  updateCkAll();
+}
+
+// ---------- batch pick → copyable script ----------
+const isPicked = id => id != null && S.picked.has(id);
+function togglePick(n, on) {
+  if (!n || n.id == null || n.prot) return;
+  if (on ?? !S.picked.has(n.id)) S.picked.set(n.id, n); else S.picked.delete(n.id);
+  syncPicks();
+}
+function pickAll(nodes, on) {
+  for (const n of nodes) if (n && n.id != null && !n.prot) on ? S.picked.set(n.id, n) : S.picked.delete(n.id);
+  syncPicks();
+}
+function setAllBox(cb, nodes) {
+  if (!cb) return;
+  const ids = nodes.filter(n => n && n.id != null && !n.prot).map(n => n.id), k = ids.filter(isPicked).length;
+  cb.disabled = !ids.length;
+  cb.checked = ids.length > 0 && k === ids.length;
+  cb.indeterminate = k > 0 && k < ids.length;
+}
+const groupItems = g => (S.cache.hints || []).filter(h => h.label === g.dataset.label);
+function updateCkAll() {
+  setAllBox($('#ckAll'), S.live ? [] : (S.cur?.children || []));
+  setAllBox($('#ckAllTop'), S.cache.top || []);
+  for (const g of $$('#hintList .hint-group')) setAllBox(g.querySelector('[data-gck]'), groupItems(g));
+}
+function syncPicks() {
+  for (const [k, tr] of S.rowEl) {
+    const p = isPicked(S.idx.get(k)?.n.id), cb = tr.querySelector('[data-ck]');
+    tr.classList.toggle('picked', p); if (cb) cb.checked = p;
+  }
+  for (const [k, t] of S.tileEl) t.classList.toggle('picked', isPicked(S.idx.get(k)?.n.id));
+  for (const el of $$('#topBody tr[data-id], #hintList .hint[data-id]')) {
+    const p = isPicked(+el.dataset.id), cb = el.querySelector('[data-ck]');
+    el.classList.toggle('picked', p); if (cb) cb.checked = p;
+  }
+  updateCkAll();
+  const any = S.picked.size > 0;
+  document.body.classList.toggle('has-picks', any);
+  $('#pickbar').hidden = !any;
+  S.copied = false; $('#pbRescan').hidden = true;
+  if (!any && S.mode !== 'trash') setMode('trash');
+  clearTimeout(S.scriptT);
+  if (any) S.scriptT = setTimeout(refreshScript, 120); else S.script = null;
+}
+function setMode(m) {
+  S.mode = m;
+  $$('#pbMode [data-mode]').forEach(x => x.classList.toggle('on', x.dataset.mode === m));
+  const b = $('#pbCopy');
+  b.textContent = m === 'rm' ? 'Copy rm -rf script' : 'Copy trash script';
+  b.className = 'btn sm ' + (m === 'rm' ? 'danger' : 'primary');
+}
+async function refreshScript() {
+  clearTimeout(S.scriptT);
+  const req = ++S.scriptReq;
+  try {
+    const out = await api('/api/script', {ids: [...S.picked.keys()], mode: S.mode});
+    if (req !== S.scriptReq) return;
+    S.script = out;
+    if (out.live && out.live.length < S.picked.size) {
+      const keep = new Set(out.live);
+      for (const id of [...S.picked.keys()]) if (!keep.has(id)) S.picked.delete(id);
+      if (!S.picked.size) return syncPicks();
+    }
+    if (S.copied) return;
+    $('#pbCount').textContent = `${out.count} item${out.count === 1 ? '' : 's'}`;
+    $('#pbBytes').textContent = fmtBytes(out.bytes) + (out.skipped ? ` · ${out.skipped} protected, left out` : '');
+    $('#pbPre').textContent = out.script;
+  } catch (e) { toast(e.message, true) }
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text) }
+  catch {
+    const ta = Object.assign(document.createElement('textarea'), {value: text});
+    document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+}
+async function copyScript() {
+  await refreshScript();
+  const text = S.script?.script || '';
+  if (!text) return;
+  await copyText(text);
+  S.copied = true;
+  const n = S.script.count;
+  $('#pbCount').textContent = `Copied ${n} ${S.mode === 'rm' ? 'rm -rf' : 'trash'} command${n === 1 ? '' : 's'}`;
+  $('#pbBytes').textContent = 'run it, then rescan';
+  $('#pbRescan').hidden = false;
+}
+function clearPicks() { S.picked.clear(); syncPicks() }
+const rowNode = tr => tr.dataset.k ? S.idx.get(tr.dataset.k)?.n : (S.cache.top || []).find(x => x.id === +tr.dataset.id);
+// A click on a checkbox or its cell picks; Shift+click on any row picks a range from the last pick.
+function pickClick(e, n, body) {
+  const cb = e.target.closest('[data-ck]');
+  if (!cb && !e.target.closest('td.ck') && !e.shiftKey) return false;
+  if (!n || n.prot) return true;
+  if (e.shiftKey && S.anchor != null && body) {
+    const rows = rowsOf(body).map(rowNode), a = rows.findIndex(x => x?.id === S.anchor), b = rows.findIndex(x => x?.id === n.id);
+    if (a >= 0 && b >= 0) { pickAll(rows.slice(Math.min(a, b), Math.max(a, b) + 1), true); S.anchor = n.id; return true }
+  }
+  togglePick(n, cb ? cb.checked : undefined);
+  S.anchor = n.id;
+  return true;
+}
+
+// ---------- keyboard: rows ----------
+const rowsOf = body => [...body.rows].filter(r => r.dataset.k || r.dataset.id);
+function focusRow(body, tr) {
+  if (!tr) return;
+  for (const r of body.querySelectorAll('tr[tabindex="0"]')) r.tabIndex = -1;
+  tr.tabIndex = 0; tr.focus({preventScroll: true}); tr.scrollIntoView({block: 'nearest'});
+}
+function tableKeys(body, open) {
+  body.addEventListener('focusin', e => { const tr = e.target.closest('tr[data-k]'); if (tr) S.focusKey = tr.dataset.k });
+  body.addEventListener('keydown', e => {
+    const tr = e.target.closest('tr');
+    if (!tr || e.target.matches('button,input')) return;
+    const rows = rowsOf(body), i = rows.indexOf(tr), n = rowNode(tr);
+    if (i < 0) return;
+    if (e.key === 'ArrowDown') focusRow(body, rows[Math.min(rows.length - 1, i + 1)]);
+    else if (e.key === 'ArrowUp' && !e.altKey) focusRow(body, rows[Math.max(0, i - 1)]);
+    else if (e.key === 'Home') focusRow(body, rows[0]);
+    else if (e.key === 'End') focusRow(body, rows[rows.length - 1]);
+    else if (e.key === 'Enter' || e.key === 'ArrowRight') open(n);
+    else if (e.key === ' ') pickClick({target: tr, shiftKey: e.shiftKey, closest: null}, n, body) || (togglePick(n), n && (S.anchor = n.id));
+    else if (e.key === 'Backspace' && e.metaKey) doAction('trash', n);
+    else if (e.key === 'ArrowLeft' && body.id === 'exBody') goUp();
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  });
+}
+
+// ---------- ASCII moments ----------
+// While scanning, a faint read head of glyphs sweeps across the treemap.
+function startSweep() {
+  const el = $('#sweep');
+  cancelAnimationFrame(S.sweepRaf);
+  if (reduceMotion.matches) return;
+  el.hidden = false;
+  const cols = 7, period = 2400;
+  const tick = ts => {
+    if (!S.live) { el.hidden = true; return }
+    const W = el.parentElement.clientWidth, H = el.parentElement.clientHeight;
+    if (ts - (el._t || 0) > 60) {
+      el._t = ts;
+      let out = '';
+      for (let r = 0, rows = Math.ceil(H / 12); r < rows; r++) {
+        for (let c = 0; c < cols; c++) out += TRACE_RAMP[Math.round(Math.random() * (c / (cols - 1)) * (TRACE_RAMP.length - 1))];
+        out += '\n';
+      }
+      el.textContent = out;
+    }
+    el.style.transform = `translateX(${(ts % period) / period * (W + 60) - 60}px)`;
+    S.sweepRaf = requestAnimationFrame(tick);
+  };
+  S.sweepRaf = requestAnimationFrame(tick);
+}
+// A trashed tile or row dissolves into glyphs before the treemap closes the gap.
+function dissolve(el) {
+  if (!el || reduceMotion.matches) return Promise.resolve();
+  const r = el.getBoundingClientRect();
+  if (r.width < 4 || r.height < 4) return Promise.resolve();
+  const cs = getComputedStyle(el);
+  const pre = document.createElement('pre');
+  pre.className = 'dissolve'; pre.setAttribute('aria-hidden', 'true');
+  Object.assign(pre.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
+    color: el.classList.contains('tile') ? cs.backgroundColor : cs.color});
+  document.body.append(pre);
+  el.style.opacity = '0';
+  const cols = Math.max(1, Math.round(r.width / 6.6)), rows = Math.max(1, Math.round(r.height / 12));
+  const seed = Array.from({length: cols * rows}, Math.random), G = '@%#*+=-:. ', dur = 420;
+  return new Promise(done => {
+    const t0 = performance.now();
+    const tick = ts => {
+      const p = Math.min(1, (ts - t0) / dur);
+      let out = '';
+      for (let y = 0, i = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++, i++) out += G[Math.min(G.length - 1, Math.floor(Math.max(0, p * 1.6 - seed[i] * .6) * G.length))];
+        out += '\n';
+      }
+      pre.textContent = out;
+      if (p < 1) requestAnimationFrame(tick); else { pre.remove(); done() }
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+// ---------- actions ----------
+function lookup(id) {
+  const key = S.keyById.get(id);
+  return (key && S.idx.get(key)?.n) || (S.cache.top || []).find(r => r.id === id) || (S.cache.hints || []).find(r => r.id === id);
+}
+function nodeEls(n) {
+  const key = S.keyById.get(n.id);
+  return [S.tileEl.get(key), S.rowEl.get(key), $(`#topBody tr[data-id="${n.id}"]`), $(`#hintList .hint[data-id="${n.id}"]`)].filter(Boolean);
+}
+async function afterChange() {
+  S.cache = {};
+  let ok = false;
+  if (S.cur?.path) try { ok = await go((await api('/api/find?path=' + encodeURIComponent(S.cur.path))).id, 'replace', null, true, true) } catch {}
+  if (!ok) { const ids = S.cur ? S.cur.crumbs.map(c => c.id).reverse() : [0]; for (const id of ids) if (await go(id, 'replace', null, true)) break }
+  try { S.status = await api('/api/status'); renderVol(S.status); renderCrumbs() } catch {}
+  refreshHintBadge();
+  if (S.tab !== 'explore') loadTab(S.tab);
+}
+async function doAction(act, n) {
+  if (!n || n.id == null) return;
+  if (act === 'open') { setTab('explore'); return go(n.id) }
+  if (act === 'reveal') { try { await api('/api/reveal', {id: n.id}) } catch (e) { toast(e.message, true) } return }
+  if (act === 'trash') {
+    if (n.prot === 2) return toast('Protected folder', true);
+    const soft = n.prot === 1;
+    const ok = await confirmModal({title: `Move “${n.name}” to Trash?`, path: n.path,
+      body: fmtBytes(n.size) + (n.dir ? ` · ${fmtNum(n.files)} files` : ''),
+      warn: soft ? 'Personal folder: everything in it goes to the Trash' : '',
+      ok: soft ? 'Move anyway' : 'Move to Trash', danger: soft});
+    if (!ok) return;
+    let r;
+    try { r = await api('/api/trash', {id: n.id, force: soft}) } catch (e) { return toast(e.message, true) }
+    await Promise.all(nodeEls(n).map(dissolve));
+    S.picked.delete(n.id); syncPicks();
+    await afterChange();
+    refreshDisk();
+    toast(`Moved ${fmtBytes(r.bytes ?? n.size)} to Trash · Empty Trash to free it`,
+      {ms: 6000, action: r.undo ? 'Undo' : '', onAction: () => undoTrash(r.undo)});
+  }
+}
+async function undoTrash(tok) {
+  try {
+    const r = await api('/api/untrash', Array.isArray(tok) ? {undos: tok} : {undo: tok});
+    await afterChange(); refreshDisk();
+    toast(r.restored > 1 ? `Put back ${r.restored} items` : 'Put back');
+  } catch (e) { toast(e.message, true) }
+}
+async function trashPicks() {
+  await refreshScript();
+  const out = S.script;
+  if (!out || !out.count) return toast('Nothing to move', true);
+  const ok = await confirmModal({title: `Move ${out.count} item${out.count === 1 ? '' : 's'} to Trash?`,
+    body: fmtBytes(out.bytes) + (out.skipped ? ` · ${out.skipped} protected, left out` : ''), ok: 'Move to Trash'});
+  if (!ok) return;
+  let r;
+  try { r = await api('/api/trash-batch', {ids: [...S.picked.keys()]}) } catch (e) { return toast(e.message, true) }
+  await Promise.all([...S.picked.values()].flatMap(nodeEls).slice(0, 80).map(dissolve));
+  clearPicks();
+  await afterChange();
+  refreshDisk();
+  toast(`Moved ${r.moved} item${r.moved === 1 ? '' : 's'} (${fmtBytes(r.bytes)}) to Trash` + (r.failed ? ` · ${r.failed} failed` : '') + ' · Empty Trash to free it',
+    {ms: 8000, err: !r.moved, action: r.undo?.length ? 'Undo' : '', onAction: () => undoTrash(r.undo)});
+}
+// Rescan just the open folder; the top folder gets a full (live) scan instead.
+async function rescanCurrent() {
+  if (!S.cur || S.live || S.gen == null) return;
+  if (S.cur.crumbs.length < 2) return startScan(S.status.root);
+  const btn = $('#rescanBtn'), name = S.cur.node.name;
+  btn.classList.add('busy'); btn.disabled = true;
+  try {
+    const r = await api('/api/rescan', {id: S.cur.node.id});
+    S.cache = {};
+    await go(r.id, 'replace', null, false, true);
+    toast(r.delta ? `${name}: ${r.delta > 0 ? '+' : '−'}${fmtBytes(Math.abs(r.delta))}` : `${name}: no change`);
+    refreshHintBadge(); refreshDisk(); if (S.picked.size) refreshScript();
+  } catch (e) { toast(e.message, true) }
+  finally { btn.classList.remove('busy'); btn.disabled = false }
+}
+// Re-read free space and flash how much it moved since the last look.
+async function refreshDisk(manual = false) {
+  const btn = $('#diskBtn');
+  btn.classList.add('busy');
+  try {
+    const v = await api('/api/volume');
+    if (!v) return;
+    const prev = S.diskFree;
+    S.diskFree = v.free;
+    const d = prev == null ? null : v.free - prev;
+    if (d != null && (Math.abs(d) >= 1e6 || manual)) {
+      S.diskDelta = Math.abs(d) >= 1e6 ? d : 0;
+      clearTimeout(S.deltaT);
+      S.deltaT = setTimeout(() => { S.diskDelta = null; renderVol({volume: S.status?.volume || v}) }, 6000);
+    }
+    if (S.status) S.status.volume = v;
+    renderVol({volume: v});
+  } catch {} finally { setTimeout(() => btn.classList.remove('busy'), 300) }
+}
+function toggleKeys(show) {
+  const k = $('#keys');
+  show ??= k.hidden;
+  k.hidden = !show;
+  if (show) k.querySelector('.modal').focus?.();
+}
+function confirmModal({title, path = '', body = '', warn = '', ok = 'OK', danger = false}) {
+  return new Promise(resolve => {
+    const m = $('#modal'), okb = $('#mOk'), cancel = $('#mCancel'), prev = document.activeElement;
+    $('#mTitle').textContent = title;
+    $('#mPath').textContent = path ? pretty(path) : ''; $('#mPath').hidden = !path;
+    $('#mBody').textContent = body; $('#mBody').hidden = !body;
+    $('#mWarn').textContent = warn; $('#mWarn').hidden = !warn;
+    okb.textContent = ok; okb.className = 'btn ' + (danger ? 'danger' : 'primary');
+    m.hidden = false;
+    (danger ? cancel : okb).focus();
+    const key = e => {
+      if (e.key === 'Escape') { e.preventDefault(); done(false) }
+      else if (e.key === 'Tab') { e.preventDefault(); (document.activeElement === okb ? cancel : okb).focus() }
+    };
+    const done = v => {
+      m.hidden = true; m.onclick = null;
+      document.removeEventListener('keydown', key, true);
+      prev?.focus?.();
+      resolve(v);
+    };
+    document.addEventListener('keydown', key, true);
+    m.onclick = e => { if (e.target === m || e.target === cancel) done(false); else if (e.target === okb) done(true) };
+  });
+}
+function toast(msg, opt = {}) {
+  if (opt === true) opt = {err: true};
+  const t = $('#toast');
+  t.className = 'toast' + (opt.err ? ' err' : '');
+  t.replaceChildren(Object.assign(document.createElement('span'), {textContent: msg}));
+  if (opt.action) {
+    const b = Object.assign(document.createElement('button'), {textContent: opt.action});
+    b.onclick = () => { t.hidden = true; opt.onAction() };
+    t.append(b);
+  }
+  t.hidden = false;
+  clearTimeout(S.toastT); S.toastT = setTimeout(() => t.hidden = true, opt.ms || (opt.err ? 6000 : 2500));
+}
+
+// ---------- scan menu ----------
+function buildMenu() {
+  $('#scanMenu').innerHTML = '<button role="menuitem" data-pick>Choose folder…</button><hr>' +
+    PLACES.map(p => p ? `<button role="menuitem" data-path="${esc(p[1])}">${esc(p[0])}<span class="k">${esc(p[1])}</span></button>` : '<hr>').join('');
+}
+function openMenu() {
+  const m = $('#scanMenu'), r = $('#scanMenuBtn').closest('.split-btn').getBoundingClientRect();
+  m.hidden = false;
+  m.style.top = (r.bottom + 4) + 'px';
+  m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + 'px';
+  $('#scanMenuBtn').setAttribute('aria-expanded', 'true');
+  m.querySelector('button').focus();
+}
+function closeMenu(refocus) {
+  const m = $('#scanMenu');
+  if (m.hidden) return;
+  m.hidden = true; $('#scanMenuBtn').setAttribute('aria-expanded', 'false');
+  if (refocus) $('#scanMenuBtn').focus();
+}
+// A place inside the current scan just navigates there; anything else starts a scan.
+async function goPlace(path) {
+  closeMenu();
+  if (S.gen != null && !S.live) {
+    try { const r = await api('/api/find?path=' + encodeURIComponent(path)); setTab('explore'); return go(r.id) } catch {}
+  }
+  $('#pathInput').value = path;
+  startScan(path);
+}
+function updateScanBtn() {
+  const dirty = !S.status?.root || $('#pathInput').value.trim() !== pretty(S.status.root);
+  for (const b of [$('#scanBtn'), $('#scanMenuBtn')]) b.classList.toggle('primary', dirty);
+}
+
+// Native app window: the Cocoa side calls window.dcPicked(path). Browser: server shows the macOS picker.
+window.dcPicked = p => { if (p) { $('#pathInput').value = pretty(p); startScan(p) } };
+async function pickFolder() {
+  if (window.webkit?.messageHandlers?.pick) return window.webkit.messageHandlers.pick.postMessage('');
+  try { const r = await api('/api/pick', {}); window.dcPicked(r.path) } catch (e) { toast(e.message, true) }
+}
+
+// ---------- wiring ----------
+function init() {
+  $('#upBtn').innerHTML = ICON.up;
+  $('#scanMenuBtn').innerHTML = ICON.down;
+  $('#pbClear').innerHTML = ICON.x;
+  $('#rescanBtn').innerHTML = ICON.refresh;
+  $('#diskBtn').innerHTML = ICON.refresh;
+  $('#keysBtn').innerHTML = ICON.keys;
+  $('#rescanBtn').onclick = rescanCurrent;
+  $('#diskBtn').onclick = () => refreshDisk(true);
+  $('#keysBtn').onclick = () => toggleKeys();
+  $('#keys').onclick = e => { if (e.target.id === 'keys') toggleKeys(false) };
+  $('#pbTrash').onclick = trashPicks;
+  addEventListener('focus', () => refreshDisk());
+  buildMenu();
+  $('#scanForm').onsubmit = e => { e.preventDefault(); closeMenu(); startScan($('#pathInput').value) };
+  $('#pathInput').addEventListener('input', updateScanBtn);
+  $('#scanMenuBtn').onclick = () => $('#scanMenu').hidden ? openMenu() : closeMenu(true);
+  const placeClick = e => {
+    const b = e.target.closest('[data-path],[data-pick]');
+    if (!b) return;
+    if (b.dataset.path) goPlace(b.dataset.path); else { closeMenu(); pickFolder() }
+  };
+  $('#scanMenu').onclick = placeClick;
+  $('#emptyActs').onclick = placeClick;
+  $('#scanMenu').addEventListener('keydown', e => {
+    const items = [...$('#scanMenu').querySelectorAll('button')], i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') items[(i + 1) % items.length].focus();
+    else if (e.key === 'ArrowUp') items[(i - 1 + items.length) % items.length].focus();
+    else if (e.key === 'Escape') closeMenu(true);
+    else { if (e.key === 'Tab') closeMenu(); return }
+    e.preventDefault();
+  });
+  document.addEventListener('mousedown', e => { if (!e.target.closest('#scanMenu,#scanMenuBtn')) closeMenu() });
+
+  $('#cancelBtn').onclick = () => api('/api/cancel', {}).catch(() => {});
+  $('#pbClear').onclick = clearPicks;
+  $('#pbCopy').onclick = copyScript;
+  $('#pbRescan').onclick = () => S.status?.root && startScan(S.status.root);
+  $('#pbView').onclick = () => { const pre = $('#pbPre'); pre.hidden = !pre.hidden; $('#pbView').textContent = pre.hidden ? 'Preview' : 'Hide' };
+  $('#pbMode').onclick = e => {
+    const b = e.target.closest('[data-mode]');
+    if (!b || b.dataset.mode === S.mode) return;
+    setMode(b.dataset.mode); S.copied = false; refreshScript();
+  };
+  $('#ckAll').onclick = e => pickAll(S.cur?.children || [], e.target.checked);
+  $('#ckAllTop').onclick = e => pickAll(S.cache.top || [], e.target.checked);
+
+  $('#tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (b && !b.disabled) setTab(b.dataset.tab) };
+  $('#tabs').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const tabs = [...$$('#tabs [data-tab]')].filter(b => !b.disabled), i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const t = tabs[(i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
+    t.focus(); setTab(t.dataset.tab); e.preventDefault();
+  });
+  $('#upBtn').onclick = goUp;
+  $('#crumbs').onclick = e => { const b = e.target.closest('[data-id]'); if (b && !S.live) go(+b.dataset.id) };
+
+  $('#exTable thead').onclick = e => {
+    const th = e.target.closest('th[data-k]'); if (!th) return;
+    const k = th.dataset.k;
+    S.sort = S.sort.k === k ? {k, d: -S.sort.d} : {k, d: k === 'name' ? 1 : -1};
+    renderTable(true);
+  };
+
+  const tm = $('#tm');
+  let moveEv = null;
+  tm.addEventListener('mousemove', e => {
+    if (!moveEv) requestAnimationFrame(() => {
+      const ev = moveEv; moveEv = null;
+      if (!ev) return;
+      const t = ev.target.closest('.tile[data-k]');
+      setHot(t ? t.dataset.k : null, t);
+      t ? showTip(ev, t.dataset.k) : hideTip();
+    });
+    moveEv = e;
+  });
+  tm.addEventListener('mouseleave', () => { moveEv = null; setHot(null); hideTip() });
+  tm.addEventListener('click', e => {
+    const t = e.target.closest('.tile[data-id]'); if (!t || S.live) return;
+    const id = +t.dataset.id;
+    if (e.metaKey || e.ctrlKey) return togglePick(S.idx.get(t.dataset.k)?.n);
+    if (t.dataset.dir === '1') { hideTip(); return go(id) }
+    const parent = t.parentElement.closest('.tile[data-id]');
+    if (parent) { hideTip(); go(+parent.dataset.id, 'push', id) } else select(id);
+  });
+
+  const exBody = $('#exBody');
+  exBody.addEventListener('mouseover', e => { const tr = e.target.closest('tr[data-k]'); setHot(tr ? tr.dataset.k : null) });
+  exBody.addEventListener('mouseleave', () => setHot(null));
+  exBody.addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-k]'); if (!tr || S.live) return;
+    const n = rowNode(tr), act = e.target.closest('[data-act]');
+    if (!n || pickClick(e, n, exBody)) return;
+    if (act) return doAction(act.dataset.act, n);
+    n.dir ? go(n.id) : select(n.id);
+  });
+  tableKeys(exBody, n => n && !S.live && (n.dir ? go(n.id) : select(n.id)));
+
+  const topBody = $('#topBody');
+  topBody.addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+    const r = rowNode(tr), act = e.target.closest('[data-act]');
+    if (!r || pickClick(e, r, topBody)) return;
+    if (act) return doAction(act.dataset.act, r);
+    setTab('explore'); go(r.parentId, 'push', r.id);
+  });
+  tableKeys(topBody, r => { if (r) { setTab('explore'); go(r.parentId, 'push', r.id) } });
+
+  $('#hintList').addEventListener('click', e => {
+    const copy = e.target.closest('[data-copy]');
+    if (copy) { copyText(copy.dataset.copy); return toast('Copied') }
+    const g = e.target.closest('.hint-group');
+    if (e.target.closest('[data-gck]')) return pickAll(groupItems(g), e.target.checked);
+    if (g && e.target.closest('.ghead')) {
+      const open = g.classList.toggle('open');
+      g.querySelector('.gtoggle').setAttribute('aria-expanded', open);
+      open ? S.openGroups.add(g.dataset.label) : S.openGroups.delete(g.dataset.label);
+      return;
+    }
+    const card = e.target.closest('.hint[data-id]'); if (!card) return;
+    const n = lookup(+card.dataset.id);
+    if (pickClick(e, n, null)) return;
+    const act = e.target.closest('[data-act]');
+    if (act) doAction(act.dataset.act, n);
+  });
+
+  document.addEventListener('keydown', e => {
+    if (!$('#modal').hidden) return;
+    if (!$('#keys').hidden) { if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); toggleKeys(false) } return }
+    const typing = e.target.matches('input[type=text],input:not([type]),textarea');
+    if ((e.metaKey && e.key === 'l') || (e.key === '/' && !typing)) { e.preventDefault(); $('#pathInput').select(); return }
+    if (typing) return;
+    if (e.key === '?') { e.preventDefault(); return toggleKeys(true) }
+    if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey && S.tab === 'explore') { e.preventDefault(); return rescanCurrent() }
+    if (e.key === 'Escape') { if (!$('#scanMenu').hidden) return closeMenu(true); if (S.picked.size) return clearPicks() }
+    if (S.tab === 'explore' && (e.key === 'Backspace' || (e.key === 'ArrowUp' && e.altKey))) { e.preventDefault(); goUp() }
+  });
+  addEventListener('popstate', e => {
+    const st = e.state;
+    if (!S.live && st && st.gen === S.gen && st.id != null) { if (S.tab !== 'explore') setTab('explore'); go(st.id, 'pop') }
+  });
+  new ResizeObserver(() => { cancelAnimationFrame(S.raf); S.raf = requestAnimationFrame(() => { drawTreemap(); rehot() }) }).observe(tm);
+  poll();
+}
+
+S.token = readToken();
+const tabParam = location.hash.match(/tab=(\w+)/);
+if (tabParam && document.getElementById('view-' + tabParam[1])) setTab(tabParam[1]);
+if (S.token) init();
+else showEmpty('Open the link from the terminal', 'It carries the access token');
+</script>
+</body>
+</html>

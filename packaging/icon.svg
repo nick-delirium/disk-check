@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Flat treemap glyph in one cobalt hue on a graphite tile. No gloss, no hue gradients. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232325"/><stop offset="1" stop-color="#19191b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity=".28"/></filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  </g>
+  <rect x="101" y="101" width="822" height="822" rx="184" fill="none" stroke="#fff" stroke-opacity=".08" stroke-width="2"/>
+  <rect x="200" y="200" width="336" height="624" rx="40" fill="#3d7eff"/>
+  <rect x="560" y="200" width="264" height="356" rx="40" fill="#85adff"/>
+  <rect x="560" y="580" width="128" height="244" rx="32" fill="#1f56c9"/>
+  <rect x="712" y="580" width="112" height="110" rx="28" fill="#c2d6ff"/>
+  <rect x="712" y="714" width="112" height="110" rx="28" fill="#2f67e0"/>
+</svg>
