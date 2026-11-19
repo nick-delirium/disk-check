@@ -444,7 +444,7 @@ const S = {
   sort: {k: 'size', d: -1}, tab: 'explore', sel: null, hot: null, hotEls: [],
   idx: new Map(), keyById: new Map(), tileEl: new Map(), rowEl: new Map(),
   colors: new Map(), kidN: new Map(), rootHue: 0, trace: [], lastRate: null, cache: {}, home: '',
-  picked: new Map(), mode: 'trash', script: null, scriptReq: 0, copied: false, anchor: null, focusKey: null, openGroups: new Set(), diskFree: null, diskDelta: null,
+  picked: new Map(), mode: 'trash', script: null, scriptReq: 0, copied: false, anchor: null, focusKey: null, openGroups: new Set(), diskFree: null, diskDelta: null, prefs: {},
 };
 
 // ---------- formatting ----------
@@ -638,12 +638,16 @@ function renderVol(st) {
 }
 function renderBanner(st) {
   const b = $('#banner');
-  if (!st.errors) { b.hidden = true; return }
+  if (!st.errors || S.prefs.fdaDismissed) { b.hidden = true; return }
   b.innerHTML = `${ICON.alert}<span title="${esc((st.errSamples || []).map(pretty).join('\n'))}">${fmtNum(st.errors)} unreadable item${st.errors > 1 ? 's' : ''}, totals may be low</span>
     <button class="btn sm" id="fdaBtn">Grant Full Disk Access</button><button class="ib" id="bannerX" title="Dismiss">${ICON.x}</button>`;
   b.hidden = false;
   $('#fdaBtn').onclick = () => api('/api/fda', {}).catch(e => toast(e.message, true));
-  $('#bannerX').onclick = () => { b.hidden = true; drawTreemap() };
+  $('#bannerX').onclick = () => {
+    b.hidden = true; drawTreemap();
+    S.prefs.fdaDismissed = true;
+    api('/api/prefs', {fdaDismissed: true}).catch(() => {});
+  };
 }
 
 // ---------- explore ----------
@@ -739,7 +743,9 @@ function zoom(from, to, oldRects) {
   } else {
     tm.animate([{opacity: 0}, {opacity: 1}], {duration: 160, easing});
   }
-  $('#exBody').animate([{opacity: 0, transform: `translateX(${dir * 12}px)`}, {opacity: 1, transform: 'none'}], {duration: 180, easing});
+  // Animate the <table>, not its <tbody>: WebKit skips repainting table sections after a
+  // compositing animation, leaving rows blank until something else invalidates them.
+  $('#exTable').animate([{opacity: 0, transform: `translateX(${dir * 12}px)`}, {opacity: 1, transform: 'none'}], {duration: 180, easing});
 }
 function goUp() { const c = S.cur?.crumbs; if (!S.live && c && c.length > 1) go(c[c.length - 2].id) }
 
@@ -1554,7 +1560,7 @@ function init() {
     if (!S.live && st && st.gen === S.gen && st.id != null) { if (S.tab !== 'explore') setTab('explore'); go(st.id, 'pop') }
   });
   new ResizeObserver(() => { cancelAnimationFrame(S.raf); S.raf = requestAnimationFrame(() => { drawTreemap(); rehot() }) }).observe(tm);
-  poll();
+  api('/api/prefs').then(p => { S.prefs = p || {} }).catch(() => {}).finally(poll);
 }
 
 S.token = readToken();

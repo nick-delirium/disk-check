@@ -88,6 +88,8 @@ func (a *App) guard(next http.Handler) http.Handler {
 
 func (a *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/status", a.handleStatus)
+	mux.HandleFunc("GET /api/prefs", a.handlePrefsGet)
+	mux.HandleFunc("POST /api/prefs", a.handlePrefsSet)
 	mux.HandleFunc("POST /api/scan", a.handleScan)
 	mux.HandleFunc("POST /api/cancel", a.handleCancel)
 	mux.HandleFunc("GET /api/node", a.handleNode)
